@@ -151,4 +151,65 @@ public class Receiver {
 
         return new DatagramPacket(buffer, this.BUFFER_SIZE, hostAddr, port);
     }
+
+
+    /**
+     * Server will listen for requests and generate responses until a <shutdown/> message is passed
+     */
+    public void run() {
+        this._continueService = true;
+
+        while (this._continueService){
+            DatagramPacket newDatagramPacket = this.receiverRequest();
+
+            String request = new String(newDatagramPacket.getData()).trim();
+
+            System.out.println("Sender IP: " + newDatagramPacket.getAddress().getHostAddress());
+            System.out.println("Sender Request: " + request);
+
+            if (request.equals("<shutdown/>")){
+                this._continueService = false;
+            }
+
+            if (request != null) {
+                String reponse = "<echo>" + request + "</echo>";
+
+                this.sendResponse(reponse, 
+                                  newDatagramPacket.getAddress().getHostName(), 
+                                  newDatagramPacket.getPort());
+
+            }
+        }
+    }
+
+    public static void main(String[] args){
+        Receiver server;
+        String   serverName;
+        String   req;
+
+        if (args.length != 1){
+            System.err.println("Missing argument.  Usage: Java Receiver <port number>\n");
+            return;
+        }
+
+        int portNum;
+
+        // Try to parse port number from user argument
+        try {
+            portNum = Integer.parseInt(args[0]);
+        } catch (NumberFormatException e){
+            System.err.println("Invalid argument, must be integer.  Usage: Java Receiver <port number>\n");
+            return;
+        }
+
+        server = new Receiver(portNum);
+
+        // Error while creating socket
+        if (server.createSocket() < 0){
+            return;
+        }
+
+        server.run();
+        server.closeSocket();
+    }
 }
