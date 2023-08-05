@@ -4,14 +4,23 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
+import java.util.HashMap;
 import java.util.Scanner;
 
 public class Network {
     
-    private final int       BUFFER_SIZE = 256;
+
     private DatagramSocket  _socket;
     private int             _port;
     private boolean         _continueService;
+
+    private static final int SEGMENT_SIZE = 10;
+    private static final int BUFFER_SIZE = 54;
+
+    private static final String SOURCE_IP = "127.0.0.1";
+    private static final String DEST_IP = "127.0.0.1";
+
+    private Utility utility = new Utility();
 
     public Network(int port) {
         this._port = port;
@@ -34,120 +43,185 @@ public class Network {
         return 0;
     }
 
-    public int sendDatagramPacket(String packet, String hostAddr, int port){
-        DatagramPacket newDatagramPacket = this.createDatagramPacket(packet, hostAddr, port);
-
-        if (newDatagramPacket != null){
-            try {
-                this._socket.send(newDatagramPacket);
-            } catch (IOException e) {
-                System.err.println("Unable to send message to Receiver (server)");
-                return -1;
-            }
-            return 0;
-        }
-
-        System.err.println("Unable to create message");
-        return -1; 
-    }
-
-    public DatagramPacket receiveDatagramPacket(){
-        byte[] buffer = new byte[this.BUFFER_SIZE];
-
-        DatagramPacket newDatagramPacket = new DatagramPacket(buffer, BUFFER_SIZE);
-
-        try {
-            this._socket.receive(newDatagramPacket);
-        } catch (IOException e) {
-            System.err.println("NETWORK: Unable to receive message");
-            return null;
-        }
-
-        return newDatagramPacket;
-    }
 
     /**
-     * Creates a datagram using the provided destination hostname and port.  Loads in the request message to the buffer where it will wait to be sent
-     * 
-     * @param request   - Request datagramPacket is being created for
-     * @param hostname  - Hostname that is used to search for IP address to send datagram
-     * @param port      - Port number the host is listening on for the datagram
-     * 
-     * @return          - A "datagram" or "null" if an error occured during the cration process
+     * Receives requests by calling upon underlying UDP protocol
+     * @return - datagram containing the client request
      */
-    private DatagramPacket createDatagramPacket(String request, String hostname, int port){
-        byte buffer[] = new byte[this.BUFFER_SIZE];
+    public DatagramPacket receiveRequest() {
+        byte[] buffer = new byte[SEGMENT_SIZE];
+        DatagramPacket packetToReceive = new DatagramPacket(buffer, SEGMENT_SIZE);
 
-        // Initiallize buffer with empty values for all byte elements
-        for (int i = 0; i < this.BUFFER_SIZE; i++){
-            buffer[i] = '\0';
-        }
-
-        /*
-         * Convert request String to byte array
-         * Copy contents of converted array to buffer
-         * 
-         * Math.min will determine smaller array (data or buffer) to handle 
-         *   indexing byte arrays (i.e. avoid IndexOutOfBoundsException)
-         */
-        byte data[] = request.getBytes();
-        System.arraycopy(data, 0, buffer, 0, Math.min(data.length, buffer.length));
-
-
-        /* Search for IP address of given hostname.  If none exist then no     
-         *   DatagramPacket can be created
-         */
-        InetAddress hostAddr;
         try {
-            hostAddr = InetAddress.getByName(hostname);
-        } catch (UnknownHostException e) {
-            System.err.println("Invalid host address");
+            // Call to underlying UDP receive method
+            this._socket.receive(packetToReceive);
+        } catch (IOException e){
+            System.err.println("Unable to receive message from client");
             return null;
         }
 
-        return new DatagramPacket(buffer, this.BUFFER_SIZE, hostAddr, port);
+        return packetToReceive;
     }
 
+    public int sendResponse(DatagramPacket datagramPacket){
+        if (datagramPacket != null){
+            String forwardAddressForPacket = datagramPacket.getAddress().getHostAddress();
 
-    public void run() {
+            try {
+                System.out.println("Packet being sent to: " + forwardAddressForPacket + " Port: " + datagramPacket.getPort());
+
+                this._socket.send(datagramPacket);
+            } catch (IOException e){
+                System.err.println("Error: Unable to forward packet to " +
+                                    forwardAddressForPacket + " Port: " + datagramPacket.getPort());
+                return -1;
+            }
+        }
+
+        return 0;
+    }
+    
+
+
+    public void run(int percLost, int percDelayed, int percCorrupt) {
         this._continueService = true;
 
-        Scanner scan = new Scanner(System.in);
-        String request = "";
+        int packetsLost = 0;
+        int packetsDelayed = 0;
+        int packetsCorrupt = 0;
+        int packetCountFromSender = 0;
+        int packetCountFromReceiver = 0;
+        int packetsSent = 0;
 
-        while (!request.equals("<echo>q</echo>")){
 
-            System.out.println("Enter Message: ");
-            String response = scan.nextLine();
-            this.sendDatagramPacket(response, "localhost", 60000);
+        System.out.println("Beginning Network...");
 
-            DatagramPacket newDatagramPacket = this.receiveDatagramPacket();
+        while (this._continueService){
 
-            System.out.println("Host IP: " + newDatagramPacket.getAddress());
-            System.out.println("Host Name: " + newDatagramPacket.getAddress().getHostName());
+            System.out.println("Listening on port " + this._port);
 
-            request = new String(newDatagramPacket.getData()).trim();
+            DatagramPacket packet = this.receiveRequest();
 
-            System.out.println("Sender IP: " + newDatagramPacket.getAddress().getHostAddress());
-            System.out.println("Sender Request: " + request);
-            System.out.println("");
+            String request = new String(packet.getData()).trim();
+            HashMap<String, String> networkHeaderPortions = utility.parseNetworkHeader(request);
+            StringBuffer message = new StringBuffer(networkHeaderPortions.get("message"));
+
+            System.out.println("Packet received from: " + packet.getAddress().getHostAddress() + " Port: " + packet.getPort());
+            System.out.println("Request: " + request);
+
+            try {
+                this._socket.connect(InetAddress.getByName(networkHeaderPortions.get("destIP")), Integer.parseInt(networkHeaderPortions.get("destPort")));
+            } catch (UnknownHostException e){
+                System.err.println("Error: Unable to connect to host " +
+                                    networkHeaderPortions.get("destIP") + " on port " + networkHeaderPortions.get("destPort"));
+                return;
+            }
+
+            try {
+                packet.setAddress(InetAddress.getByName(networkHeaderPortions.get("destIP")));
+                packet.setPort(Integer.parseInt(networkHeaderPortions.get("destPort")));
+            }  catch (UnknownHostException e){
+                System.err.println("Error: Unable to connect to host " +
+                                    networkHeaderPortions.get("destIP") + " on port " + networkHeaderPortions.get("destPort"));
+                return;
+            }
+
+            boolean stop = false;
+
+            while (!stop){
+                if (percDelayed > 0) {
+                    if (Math.random() * 100 < percDelayed) {
+                        System.out.println("Packet delayed");
+                        packetsDelayed++;
+
+                        new Thread(new Runnable() {
+                            @Override
+                            public void run() {
+                                try {
+                                    Thread.sleep(3000);
+                                    // Forward the packet to the destination host and port
+                                    sendResponse(packet);
+                                } catch (InterruptedException e) {
+                                    e.printStackTrace();
+                                }
+
+                            }
+                        }).start();
+
+                        stop = true;
+                        continue;
+                    }
+                }
+
+                // Use the lostPercent to determine if the packet should be lost
+                if (percLost > 0) {
+                    if (Math.random() * 100 < percLost) {
+                        System.out.println("Packet lost");
+                        packetsLost++;
+                        stop = true;
+                        continue;
+                    }
+                }
+
+                // Use the errorPercent to determine if the packet should be corrupted, change checksum byte in message
+                if (percCorrupt > 0) {
+                    if (Math.random() * 100 < percCorrupt) {
+                        System.out.println("Packet corrupted");
+                        packetsCorrupt++;
+
+                        // Flip checksum byte
+                        message.setCharAt(0, '1');
+
+                    
+                        String dataString = message.toString();
+                        byte data[] = dataString.getBytes();
+                        packet.setData(data);
+                    }
+                }
+            
+                this.sendResponse(packet);
+                packetsSent++;
+                stop = true;
+                System.out.println("");
+            
+                // Every 5 packets print the network statistics
+                if ((packetCountFromSender + packetCountFromReceiver) % 5 == 0) {
+                    System.out.println("");
+                    System.out.println("Total Packets Received From Sender: " + packetCountFromSender);
+                    System.out.println("Total Packets Received From Receiver: " + packetCountFromReceiver);
+                    System.out.println("Total Packets Received: " + (packetCountFromSender + packetCountFromReceiver));
+                    System.out.println("Total Packets Sent: " + packetsSent);
+                    System.out.println("Lost Packets: " + packetsLost);
+                    System.out.println("Delayed Packets: " + packetsDelayed);
+                    System.out.println("Corrupt Packets: " + packetsCorrupt);
+                    System.out.println("");
+                }
+            }
         }
-        scan.close();
-        // while (this._continueService){
-        //     String response = "<echo>Hello</echo>";
 
-          
-        // }
+        
 
         
     }
 
     public static void main(String[] args) {
         Network network;
+        int percLost, percDelayed, percCorrupt;
+
+        if (args.length != 4){
+            System.err.println("Usuage: java Network <network_port> <%_lost> <%_delayed> <%_corrupt>");
+            return;
+        }
 
         network = new Network(Integer.parseInt(args[0]));
-        network.createSocket();
-        network.run();
+        percLost = Integer.parseInt(args[1]);
+        percDelayed = Integer.parseInt(args[2]);
+        percCorrupt = Integer.parseInt(args[3]);
+        if (network.createSocket() < 0){
+            return;
+        }
+        
+        network.run(percLost, percDelayed, percCorrupt);
         network.closeSocket();
     }
 }
