@@ -107,7 +107,7 @@ public class Network {
 
             DatagramPacket packet = this.receiveRequest();
 
-            String request = new String(packet.getData()).trim();
+            String request = new String(packet.getData());
             
             HashMap<String, String> networkHeaderPortions = utility.parseNetworkHeader(request);
             StringBuffer message = new StringBuffer(networkHeaderPortions.get("message"));
@@ -167,7 +167,6 @@ public class Network {
                     if (Math.random() * 100 < percLost) {
                         System.out.println("Packet lost");
                         packetsLost++;
-                        stop = true;
                     }
                 }
 

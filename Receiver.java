@@ -68,12 +68,13 @@ public class Receiver {
     }
 
 
-    public int sendResponse(String srcIP, String srcPort, String destIP, String destPort, String networkPort, String response){
+    public int sendResponse(String srcIP, String srcPort, String destIP, String destPort, String networkIP, String networkPort, String seqNum, String checksum){
 
         System.out.println("Dest Port: " + destPort);
-        String networkHeader = this.utility.createNetworkHeader(srcIP, srcPort, destIP, destPort, response);
+        // String networkHeader = this.utility.createNetworkHeader(srcIP, srcPort, destIP, destPort, response);
+        String networkHeader = this.utility.createNetworkHeader(networkIP, Integer.toString(this._port), destIP, destPort, seqNum + checksum + "ACK" + seqNum);
 
-        DatagramPacket packet = this.utility.createDatagramPacket(networkHeader, destIP, networkPort, BUFFER_SIZE);
+        DatagramPacket packet = this.utility.createDatagramPacket(networkHeader, networkIP, networkPort, BUFFER_SIZE);
 
         if(packet != null) {
             try {
@@ -128,11 +129,11 @@ public class Receiver {
             System.out.println("Host IP: " + newDatagramPacket.getAddress());
             System.out.println("Host Name: " + newDatagramPacket.getAddress().getHostName());
 
-            String request = new String(newDatagramPacket.getData()).trim();
+            String request = new String(newDatagramPacket.getData());
             HashMap<String, String> networkHeaderPortions = utility.parseNetworkHeader(request);
             // networkHeaderPortions.put("destPort", Integer.toString(newDatagramPacket.getPort()));
 
-            String message = networkHeaderPortions.get("message");
+            String message = networkHeaderPortions.get("message").substring(3);
 
             // Check for stop bit
 
@@ -147,23 +148,41 @@ public class Receiver {
                 messagesBuffer.add(message);
             }
 
+            if (networkHeaderPortions.get("message").charAt(2) == '1'){
+                System.out.print("FINAL MESSAGE: ");
+                for (String segment : messagesBuffer){
+                    System.out.print(segment);
+                }
+                System.out.println("");
+                messagesBuffer = new ArrayList<String>();
+            }
+
 
             if (request != null) {
                 
-                if (networkHeaderPortions.get("message") == "STOP"){
+                if (message == "STOP"){
                     this._continueService = false;
                 }
 
-                String response = "<echo>" + networkHeaderPortions.get("message") + "</echo>";
+                String response = "<echo>" + message + "</echo>";
                 this.utility.printNetworkHeaderPortions(networkHeaderPortions);
+                // this.sendResponse(networkHeaderPortions.get("destIP"),
+                //                   networkHeaderPortions.get("destPort"),
+                //                   networkHeaderPortions.get("srcIP"),
+                //                   networkHeaderPortions.get("srcPort"),
+                //                   Integer.toString(newDatagramPacket.getPort()),
+                //                   response);
                 this.sendResponse(networkHeaderPortions.get("destIP"),
                                   networkHeaderPortions.get("destPort"),
                                   networkHeaderPortions.get("srcIP"),
                                   networkHeaderPortions.get("srcPort"),
+                                  newDatagramPacket.getAddress().getHostAddress(),
                                   Integer.toString(newDatagramPacket.getPort()),
-                                  response);
+                                  String.valueOf(networkHeaderPortions.get("message").charAt(0)),
+                                  String.valueOf(networkHeaderPortions.get("message").charAt(1)));
             }
         }
+        
     }
 
     

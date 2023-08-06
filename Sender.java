@@ -112,12 +112,12 @@ public class Sender {
             // Call to underlying UDP receive method
             this._socket.receive(receivedPacket);
 
-            HashMap<String, String> networkPortions = this.utility.parseNetworkHeader(new String(receivedPacket.getData()).trim());
+            HashMap<String, String> networkPortions = this.utility.parseNetworkHeader(new String(receivedPacket.getData()));
 
             message = networkPortions.get("message");
 
-            char receivedAckByte = message.charAt(6);
-            char checksumByte = message.charAt(7);
+            char receivedAckByte = message.charAt(0);
+            char checksumByte = message.charAt(1);
             System.out.println("Message: " + message + " |RACK: " + receivedAckByte + " |SEQ: " + sequenceNum + " |CSUM: " + checksumByte);
             if (receivedAckByte != sequenceNum || checksumByte != '0'){
                 System.err.println("Error: Incorrect ACK byte received or corruption of packet detected by non-zero checksum");
