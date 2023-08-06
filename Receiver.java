@@ -15,9 +15,6 @@ public class Receiver {
     private static final int SEGMENT_SIZE = 10;
     private static final int BUFFER_SIZE = 54;
 
-    private static final String SOURCE_IP = "127.0.0.1";
-    private static final String DEST_IP = "127.0.0.1";
-
     // Utility class to create network header for RDT packet
     private Utility utility = new Utility();
     
@@ -71,12 +68,12 @@ public class Receiver {
     }
 
 
-    public int sendResponse(String srcIP, String srcPort, String destIP, String destPort, String response){
+    public int sendResponse(String srcIP, String srcPort, String destIP, String destPort, String networkPort, String response){
 
-        
+        System.out.println("Dest Port: " + destPort);
         String networkHeader = this.utility.createNetworkHeader(srcIP, srcPort, destIP, destPort, response);
 
-        DatagramPacket packet = this.utility.createDatagramPacket(networkHeader, destIP, destPort, BUFFER_SIZE);
+        DatagramPacket packet = this.utility.createDatagramPacket(networkHeader, destIP, networkPort, BUFFER_SIZE);
 
         if(packet != null) {
             try {
@@ -99,8 +96,8 @@ public class Receiver {
      * @return - datagram containing the client request
      */
     public DatagramPacket receiveRequest() {
-        byte[] buffer = new byte[SEGMENT_SIZE];
-        DatagramPacket packetToReceive = new DatagramPacket(buffer, SEGMENT_SIZE);
+        byte[] buffer = new byte[BUFFER_SIZE];
+        DatagramPacket packetToReceive = new DatagramPacket(buffer, BUFFER_SIZE);
 
         try {
             // Call to underlying UDP receive method
@@ -133,6 +130,7 @@ public class Receiver {
 
             String request = new String(newDatagramPacket.getData()).trim();
             HashMap<String, String> networkHeaderPortions = utility.parseNetworkHeader(request);
+            // networkHeaderPortions.put("destPort", Integer.toString(newDatagramPacket.getPort()));
 
             String message = networkHeaderPortions.get("message");
 
@@ -140,6 +138,8 @@ public class Receiver {
 
             System.out.println("Sender IP: " + networkHeaderPortions.get("srcIP"));
             System.out.println("Sender Request: " + message);
+
+            System.out.println("");
 
 
             // Message does not exist in message buffer yet, add it
@@ -155,10 +155,12 @@ public class Receiver {
                 }
 
                 String response = "<echo>" + networkHeaderPortions.get("message") + "</echo>";
-                this.sendResponse(networkHeaderPortions.get("srcIP"),
-                                  networkHeaderPortions.get("srcPort"),
-                                  networkHeaderPortions.get("destIP"),
+                this.utility.printNetworkHeaderPortions(networkHeaderPortions);
+                this.sendResponse(networkHeaderPortions.get("destIP"),
                                   networkHeaderPortions.get("destPort"),
+                                  networkHeaderPortions.get("srcIP"),
+                                  networkHeaderPortions.get("srcPort"),
+                                  Integer.toString(newDatagramPacket.getPort()),
                                   response);
             }
         }

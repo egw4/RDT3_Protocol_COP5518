@@ -49,6 +49,22 @@ public class Sender {
         return 0;
     }
 
+
+    public int connectSocket(String hostname, String port) {
+        try {
+            this._socket.connect(InetAddress.getByName(hostname), Integer.parseInt(port));
+        } catch (UnknownHostException ex) {
+            System.err.println("Error: Unable to connect to host");
+            return -1;
+        } catch (NumberFormatException ex) {
+            System.err.println("Error: Unable to connect to host. Invalid port number");
+            return -2;
+        }
+
+        return 0;
+    }
+
+
     /**
      * Closes open datagram socket
      * 
@@ -68,10 +84,10 @@ public class Sender {
         System.out.println("FROM RECEIVER: " + response);
     }
     
-    public int sendRequest(String segment, int sequencNum){
-        String networkHeader = this.utility.createNetworkHeader(SOURCE_IP, Integer.toString(this._port), this.destIP, this.destPort, segment);
+    public int sendRequest(String segment, String senderIP, String senderPort, String networkIP, String networkPort, String receiverIP, String receiverPort){
+        String networkHeader = this.utility.createNetworkHeader(senderIP, senderPort, receiverIP, receiverPort, segment);
 
-        DatagramPacket packet = this.utility.createDatagramPacket(networkHeader, this.destIP, this.destPort, BUFFER_SIZE);
+        DatagramPacket packet = this.utility.createDatagramPacket(networkHeader, networkIP, networkPort, BUFFER_SIZE);
 
         if(packet != null) {
             try {
@@ -88,8 +104,9 @@ public class Sender {
     }
 
     public String receiveResponse(char sequenceNum){
-        byte[] buffer = new byte[SEGMENT_SIZE];
-        DatagramPacket receivedPacket = new DatagramPacket(buffer, SEGMENT_SIZE);
+        byte[] buffer = new byte[BUFFER_SIZE];
+        DatagramPacket receivedPacket = new DatagramPacket(buffer, BUFFER_SIZE);
+        String message;
 
         try {
             // Call to underlying UDP receive method
@@ -97,11 +114,11 @@ public class Sender {
 
             HashMap<String, String> networkPortions = this.utility.parseNetworkHeader(new String(receivedPacket.getData()).trim());
 
-            String message = networkPortions.get("message");
+            message = networkPortions.get("message");
 
-            char receivedAckByte = message.charAt(5);
-            char checksumByte = message.charAt(1);
-
+            char receivedAckByte = message.charAt(6);
+            char checksumByte = message.charAt(7);
+            System.out.println("Message: " + message + " |RACK: " + receivedAckByte + " |SEQ: " + sequenceNum + " |CSUM: " + checksumByte);
             if (receivedAckByte != sequenceNum || checksumByte != '0'){
                 System.err.println("Error: Incorrect ACK byte received or corruption of packet detected by non-zero checksum");
                 return "ACK||CHECK";
@@ -115,7 +132,8 @@ public class Sender {
             return null;
         }
 
-        return buffer.toString().trim();
+        //return buffer.toString().trim();
+        return message;
     }
 
     public static void main(String[] args) {
@@ -174,6 +192,10 @@ public class Sender {
             sequenceNum ^= 1;
         }
 
+        if (sender.connectSocket(args[3], args[4]) < 0){
+            return;
+        }
+
         
         String response = "";
         boolean packetsDelivered = false;
@@ -183,7 +205,7 @@ public class Sender {
             for (int i = 0; i < segments.length; i++){
                 System.out.println("Packet: " + (i + 1) + " out of " + segments.length);
 
-                if (sender.sendRequest(segments[i], sequenceNum) < 0){
+                if (sender.sendRequest(segments[i], SOURCE_IP, args[0], args[3], args[4], args[1], args[2]) < 0){
                     sender.closeSocket();
                     return;
                 }
@@ -199,12 +221,12 @@ public class Sender {
                             
                         } else if (response == "TIMEOUT"){
                             System.out.println("Error: Exeeced time to wait for response from Receiver.\n Sending packet again");
-                                if (sender.sendRequest(segments[i], sequenceNum) < 0){
+                                if (sender.sendRequest(segments[i], SOURCE_IP, args[0], args[3], args[4], args[1], args[2]) < 0){
                                     sender.closeSocket();
                                     return;
-                                 }
+                                }
                         } else {
-                            sender.printResponse(response.trim());
+                            sender.printResponse(response);
                             ackResponse = true;
                         }
 

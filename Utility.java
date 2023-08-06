@@ -18,10 +18,10 @@ public class Utility {
      * @return          - Network header as a single String
      */
     public String createNetworkHeader(String srcIP, String srcPort, String destIP, String destPort, String message){
-        String networkHeader = srcIP + "|" + 
-                               srcPort + "|" +
-                               destIP + "|" +
-                               destPort + "|" +
+        String networkHeader = srcIP + "-" + 
+                               srcPort + "-" +
+                               destIP + "-" +
+                               destPort + "-" +
                                message;
 
         return networkHeader;
@@ -33,7 +33,7 @@ public class Utility {
      * @return              - HashMap of network header portions as key-value pairs
      */
     public HashMap<String, String> parseNetworkHeader(String networkHeader){
-        String[] portions = networkHeader.split("|"); 
+        String[] portions = networkHeader.split("-");
 
         HashMap<String, String> networkPortions = new HashMap<String, String>();
 
@@ -44,6 +44,14 @@ public class Utility {
         networkPortions.put("message", portions[4]);
 
         return networkPortions;
+    }
+
+    public void printNetworkHeaderPortions(HashMap<String, String> portions){
+        System.out.println("srcIP: " + portions.get("srcIP"));
+        System.out.println("srcPort: " + portions.get("srcPort"));
+        System.out.println("destIP: " + portions.get("destIP"));
+        System.out.println("destPort: " + portions.get("destPort"));
+        System.out.println("message: " + portions.get("message"));
     }
 
     public DatagramPacket createDatagramPacket(String networkHeader, String hostname, String port, int bufferSize){

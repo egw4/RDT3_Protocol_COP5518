@@ -49,12 +49,13 @@ public class Network {
      * @return - datagram containing the client request
      */
     public DatagramPacket receiveRequest() {
-        byte[] buffer = new byte[SEGMENT_SIZE];
-        DatagramPacket packetToReceive = new DatagramPacket(buffer, SEGMENT_SIZE);
+        byte[] buffer = new byte[BUFFER_SIZE];
+        DatagramPacket packetToReceive = new DatagramPacket(buffer, BUFFER_SIZE);
 
         try {
             // Call to underlying UDP receive method
             this._socket.receive(packetToReceive);
+            System.out.println(packetToReceive);
         } catch (IOException e){
             System.err.println("Unable to receive message from client");
             return null;
@@ -95,14 +96,19 @@ public class Network {
 
 
         System.out.println("Beginning Network...");
-
+        int count = 0;
         while (this._continueService){
 
             System.out.println("Listening on port " + this._port);
 
+            if (this._socket.isConnected()) {
+                this._socket.disconnect();
+            }
+
             DatagramPacket packet = this.receiveRequest();
 
             String request = new String(packet.getData()).trim();
+            
             HashMap<String, String> networkHeaderPortions = utility.parseNetworkHeader(request);
             StringBuffer message = new StringBuffer(networkHeaderPortions.get("message"));
 
@@ -111,6 +117,8 @@ public class Network {
 
             try {
                 this._socket.connect(InetAddress.getByName(networkHeaderPortions.get("destIP")), Integer.parseInt(networkHeaderPortions.get("destPort")));
+                
+
             } catch (UnknownHostException e){
                 System.err.println("Error: Unable to connect to host " +
                                     networkHeaderPortions.get("destIP") + " on port " + networkHeaderPortions.get("destPort"));
@@ -120,6 +128,7 @@ public class Network {
             try {
                 packet.setAddress(InetAddress.getByName(networkHeaderPortions.get("destIP")));
                 packet.setPort(Integer.parseInt(networkHeaderPortions.get("destPort")));
+
             }  catch (UnknownHostException e){
                 System.err.println("Error: Unable to connect to host " +
                                     networkHeaderPortions.get("destIP") + " on port " + networkHeaderPortions.get("destPort"));
@@ -159,7 +168,6 @@ public class Network {
                         System.out.println("Packet lost");
                         packetsLost++;
                         stop = true;
-                        continue;
                     }
                 }
 
@@ -197,10 +205,14 @@ public class Network {
                     System.out.println("");
                 }
             }
+            if (count > 1){
+                this._continueService = false;
+            }
+            // count++;
         }
 
         
-
+        
         
     }
 
