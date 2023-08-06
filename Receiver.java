@@ -161,6 +161,8 @@ public class Receiver {
 
         while (this._continueService){
             DatagramPacket newDatagramPacket = this.receiverRequest();
+            System.out.println("Host IP: " + newDatagramPacket.getAddress());
+            System.out.println("Host Name: " + newDatagramPacket.getAddress().getHostName());
 
             String request = new String(newDatagramPacket.getData()).trim();
 
