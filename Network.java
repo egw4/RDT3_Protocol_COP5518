@@ -4,14 +4,19 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
+import java.util.HashMap;
 import java.util.Scanner;
 
 public class Network {
     
-    private final int       BUFFER_SIZE = 256;
+
     private DatagramSocket  _socket;
     private int             _port;
     private boolean         _continueService;
+
+    private static final int BUFFER_SIZE = 54;
+
+    private Utility utility = new Utility();
 
     public Network(int port) {
         this._port = port;
@@ -34,120 +39,215 @@ public class Network {
         return 0;
     }
 
-    public int sendDatagramPacket(String packet, String hostAddr, int port){
-        DatagramPacket newDatagramPacket = this.createDatagramPacket(packet, hostAddr, port);
 
-        if (newDatagramPacket != null){
-            try {
-                this._socket.send(newDatagramPacket);
-            } catch (IOException e) {
-                System.err.println("Unable to send message to Receiver (server)");
-                return -1;
-            }
-            return 0;
-        }
-
-        System.err.println("Unable to create message");
-        return -1; 
-    }
-
-    public DatagramPacket receiveDatagramPacket(){
-        byte[] buffer = new byte[this.BUFFER_SIZE];
-
-        DatagramPacket newDatagramPacket = new DatagramPacket(buffer, BUFFER_SIZE);
+    /**
+     * Receives requests by calling upon underlying UDP protocol
+     * @return - datagram containing the client request
+     */
+    public DatagramPacket receiveRequest() {
+        byte[] buffer = new byte[BUFFER_SIZE];
+        DatagramPacket packetToReceive = new DatagramPacket(buffer, BUFFER_SIZE);
 
         try {
-            this._socket.receive(newDatagramPacket);
-        } catch (IOException e) {
-            System.err.println("NETWORK: Unable to receive message");
+            // Call to underlying UDP receive method
+            this._socket.receive(packetToReceive);
+            System.out.println(packetToReceive);
+        } catch (IOException e){
+            System.err.println("Unable to receive message from client");
             return null;
         }
 
-        return newDatagramPacket;
+        return packetToReceive;
     }
 
     /**
-     * Creates a datagram using the provided destination hostname and port.  Loads in the request message to the buffer where it will wait to be sent
-     * 
-     * @param request   - Request datagramPacket is being created for
-     * @param hostname  - Hostname that is used to search for IP address to send datagram
-     * @param port      - Port number the host is listening on for the datagram
-     * 
-     * @return          - A "datagram" or "null" if an error occured during the cration process
+     * Sends response to forwardAddress of datagramPacket
+     * @param datagramPacket - Packet to send to forward address
+     * @return
      */
-    private DatagramPacket createDatagramPacket(String request, String hostname, int port){
-        byte buffer[] = new byte[this.BUFFER_SIZE];
+    public int sendResponse(DatagramPacket datagramPacket){
+        if (datagramPacket != null){
+            String forwardAddressForPacket = datagramPacket.getAddress().getHostAddress();
 
-        // Initiallize buffer with empty values for all byte elements
-        for (int i = 0; i < this.BUFFER_SIZE; i++){
-            buffer[i] = '\0';
+            try {
+                System.out.println("Packet being sent to: " + forwardAddressForPacket + " Port: " + datagramPacket.getPort());
+
+                // Call underlying UDP method
+                this._socket.send(datagramPacket);
+            } catch (IOException e){
+                System.err.println("Error: Unable to forward packet to " +
+                                    forwardAddressForPacket + " Port: " + datagramPacket.getPort());
+                return -1;
+            }
         }
 
-        /*
-         * Convert request String to byte array
-         * Copy contents of converted array to buffer
-         * 
-         * Math.min will determine smaller array (data or buffer) to handle 
-         *   indexing byte arrays (i.e. avoid IndexOutOfBoundsException)
-         */
-        byte data[] = request.getBytes();
-        System.arraycopy(data, 0, buffer, 0, Math.min(data.length, buffer.length));
-
-
-        /* Search for IP address of given hostname.  If none exist then no     
-         *   DatagramPacket can be created
-         */
-        InetAddress hostAddr;
-        try {
-            hostAddr = InetAddress.getByName(hostname);
-        } catch (UnknownHostException e) {
-            System.err.println("Invalid host address");
-            return null;
-        }
-
-        return new DatagramPacket(buffer, this.BUFFER_SIZE, hostAddr, port);
+        return 0;
     }
+    
 
 
-    public void run() {
+    /**
+     * Method that handles most of functionality of this class
+     * @param lostPercent       - Percent likelihood of packet being lost 
+     * @param delayedPercent    - Percent likelihood of packet being delayed
+     * @param errorPercent      - Percent likelihood of packet being error
+     */
+    public void run(int lostPercent, int delayedPercent, int errorPercent) {
         this._continueService = true;
 
-        Scanner scan = new Scanner(System.in);
-        String request = "";
+        // Variables for summary stats while sending network traffic
+        int packetsLost = 0;
+        int packetsDelayed = 0;
+        int packetsCorrupt = 0;
+        int packetCountFromSender = 0;
+        int packetCountFromReceiver = 0;
+        int packetsSent = 0;
 
-        while (!request.equals("<echo>q</echo>")){
 
-            System.out.println("Enter Message: ");
-            String response = scan.nextLine();
-            this.sendDatagramPacket(response, "localhost", 60000);
+        System.out.println("Beginning Network...");
 
-            DatagramPacket newDatagramPacket = this.receiveDatagramPacket();
+        // Continue to listen for network traffic
+        while (this._continueService){
 
-            System.out.println("Host IP: " + newDatagramPacket.getAddress());
-            System.out.println("Host Name: " + newDatagramPacket.getAddress().getHostName());
+            System.out.println("Listening on port " + this._port);
 
-            request = new String(newDatagramPacket.getData()).trim();
+            if (this._socket.isConnected()) {
+                this._socket.disconnect();
+            }
 
-            System.out.println("Sender IP: " + newDatagramPacket.getAddress().getHostAddress());
-            System.out.println("Sender Request: " + request);
+            // Receive request
+            DatagramPacket packet = this.receiveRequest();
+            
+            String request = new String(packet.getData());
+            
+            HashMap<String, String> networkHeaderPortions = utility.parseNetworkHeader(request);
+
+            // Wrap message in StringBuffer to manipulate checksum byte later if error occurs for packet
+            StringBuffer message = new StringBuffer(networkHeaderPortions.get("message"));
+
+            System.out.println("Packet received from: " + packet.getAddress().getHostAddress() + " Port: " + packet.getPort());
+            System.out.println("Request: " + request);
+
+            // Increment packet counts from receiver if the message conatins a ACK portion
+            if(networkHeaderPortions.get("message").contains("ACK")){
+                packetCountFromReceiver++;
+            } else {
+                packetCountFromSender++;
+            }
+
+            // Attempt to connect Network to alternate program (i.e. switch connection from sender to receiver and vice versa)
+            try {
+                this._socket.connect(InetAddress.getByName(networkHeaderPortions.get("destIP")), Integer.parseInt(networkHeaderPortions.get("destPort")));
+                
+
+            } catch (UnknownHostException e){
+                System.err.println("Error: Unable to connect to host " +
+                                    networkHeaderPortions.get("destIP") + " on port " + networkHeaderPortions.get("destPort"));
+                return;
+            }
+
+            // Attempt to switch destination IP address and port of packet after having just swapped socket connection above
+            try {
+                packet.setAddress(InetAddress.getByName(networkHeaderPortions.get("destIP")));
+                packet.setPort(Integer.parseInt(networkHeaderPortions.get("destPort")));
+
+            }  catch (UnknownHostException e){
+                System.err.println("Error: Unable to connect to host " +
+                                    networkHeaderPortions.get("destIP") + " on port " + networkHeaderPortions.get("destPort"));
+                return;
+            }
+
+            
+            // Simulate delay of packet
+            if (delayedPercent > 0) {
+                if (Math.random() * 100 < delayedPercent) {
+                    System.out.println("Packet delayed");
+                    packetsDelayed++;
+                    
+                    // Thread to execute sendResponse after delaying 4 seconds
+                    new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            try {
+                                Thread.sleep(4000);
+                                // Forward the packet to the destination host and port
+                                sendResponse(packet);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+
+                        }
+                    }).start();
+
+                    continue;
+                }
+            }
+
+            // simulate lost packets
+            if (lostPercent > 0) {
+                if (Math.random() * 100 < lostPercent) {
+                    System.out.println("Packet lost");
+                    packetsLost++;
+                }
+            }
+
+            // simulate corrupt packet and alter checksum byte of message (Sender will resend packet)
+            if (errorPercent > 0) {
+                if (Math.random() * 100 < errorPercent) {
+                    System.out.println("Packet corrupted");
+                    packetsCorrupt++;
+
+                    // Flip checksum byte
+                    message.setCharAt(0, '1');
+                    
+                    String dataString = request.substring(0, request.length() - message.length()) + message;
+                    System.out.println(dataString);
+                    
+                    byte data[] = dataString.getBytes();
+                    packet.setData(data);
+                    System.out.println(packet.getData().toString());
+                }
+            }
+            
+            // No errors occured and packet is sent as expected
+            this.sendResponse(packet);
+            packetsSent++;
             System.out.println("");
-        }
-        scan.close();
-        // while (this._continueService){
-        //     String response = "<echo>Hello</echo>";
-
-          
-        // }
-
         
+            // print stats every 5 frames
+            if ((packetCountFromSender + packetCountFromReceiver) % 5 == 0) {
+                System.out.println("");
+                System.out.println("Total Packets Received From Sender: " + packetCountFromSender);
+                System.out.println("Total Packets Received From Receiver: " + packetCountFromReceiver);
+                System.out.println("Total Packets Received: " + (packetCountFromSender + packetCountFromReceiver));
+                System.out.println("Total Packets Sent: " + packetsSent);
+                System.out.println("Lost Packets: " + packetsLost);
+                System.out.println("Delayed Packets: " + packetsDelayed);
+                System.out.println("Corrupt Packets: " + packetsCorrupt);
+                System.out.println("");
+            }
+        }
     }
 
+    // Just checks that correct command line arguments were passed.  Run() above does most of the classes functionality
     public static void main(String[] args) {
         Network network;
+        int lostPercent, delayedPercent, errorPercent;
+
+        if (args.length != 4){
+            System.err.println("Usuage: java Network <network_port> <lostPercent> <delayedPercent> <errorPercent>");
+            return;
+        }
 
         network = new Network(Integer.parseInt(args[0]));
-        network.createSocket();
-        network.run();
+        lostPercent = Integer.parseInt(args[1]);
+        delayedPercent = Integer.parseInt(args[2]);
+        errorPercent = Integer.parseInt(args[3]);
+        if (network.createSocket() < 0){
+            return;
+        }
+        
+        network.run(lostPercent, delayedPercent, errorPercent);
         network.closeSocket();
     }
 }
