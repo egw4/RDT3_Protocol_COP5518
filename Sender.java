@@ -11,7 +11,6 @@ import java.util.Scanner;
 public class Sender {
     private DatagramSocket      _socket;
     private int                 _port;
-    private boolean             _continueService;
 
     private String receiverIP;
     private String receiverPort;
@@ -35,13 +34,14 @@ public class Sender {
     }
 
     /**
-     * Establishes a datagram socket to bind the specified port to
+     * Creates socket to bind the specified port to
      * 
-     * @return - 0 or a negative number describing an error code if the connection could not be established
+     * @return - 0, if no error; otherwise, a negative number indicates an error
      */
     public int createSocket() {
         try {
             this._socket = new DatagramSocket(this._port);
+            this._socket.setSoTimeout(4000);
         } catch (SocketException e){
             System.err.println("Unable to create and bind to socket");
             return -1;
@@ -50,6 +50,13 @@ public class Sender {
     }
 
 
+    /**
+     * Connects and binds to the specified port
+     * 
+     * @param hostname - IP address that port where located
+     * @param port     - Port to bind to
+     * @return         - If there is an error, will return non-zero value
+     */
     public int connectSocket(String hostname, String port) {
         try {
             this._socket.connect(InetAddress.getByName(hostname), Integer.parseInt(port));
@@ -66,9 +73,8 @@ public class Sender {
 
 
     /**
-     * Closes open datagram socket
+     * Closes open socket
      * 
-     * @return - 0, if no error; otherwise, a negative number indicating the error
      */
     public int closeSocket() {
         this._socket.close();
@@ -81,16 +87,31 @@ public class Sender {
      * @param response - the reponse as a string 
      */
     public void printResponse(String response){
-        System.out.println("FROM RECEIVER: " + response);
+        System.out.println("FROM RECEIVER: " + response + "\n");
     }
     
+    /**
+     * Calls on the utility class to create the network header and datagram packet to send to the Network
+     * 
+     * @param segment       - Message segment to send
+     * @param senderIP      - IP address of Sender
+     * @param senderPort    - Port number of Sender
+     * @param networkIP     - IP address of Network
+     * @param networkPort   - Port number of Network
+     * @param receiverIP    - IP address of Receiver
+     * @param receiverPort  - Port number of Receiver
+     * @return              - 0, if no errors; otherwise, non-zero value indicates error
+     */
     public int sendRequest(String segment, String senderIP, String senderPort, String networkIP, String networkPort, String receiverIP, String receiverPort){
         String networkHeader = this.utility.createNetworkHeader(senderIP, senderPort, receiverIP, receiverPort, segment);
 
         DatagramPacket packet = this.utility.createDatagramPacket(networkHeader, networkIP, networkPort, BUFFER_SIZE);
 
+        //  If the packet is created, send it through the datagram socket
         if(packet != null) {
             try {
+
+                // Call underlying UDP sending method
                 this._socket.send(packet);
                 System.out.println("Senders's Request: " + networkHeader);
             } catch (IOException e) {
@@ -103,6 +124,12 @@ public class Sender {
         return -1;
     }
 
+
+    /**
+     * Receive the response from the Network (indirectly the Receiver) and return as string
+     * @param sequenceNum - Sequence number to check against ACK byte
+     * @return            - String representing response message
+     */
     public String receiveResponse(char sequenceNum){
         byte[] buffer = new byte[BUFFER_SIZE];
         DatagramPacket receivedPacket = new DatagramPacket(buffer, BUFFER_SIZE);
@@ -118,29 +145,32 @@ public class Sender {
 
             char receivedAckByte = message.charAt(0);
             char checksumByte = message.charAt(1);
-            System.out.println("Message: " + message + " |RACK: " + receivedAckByte + " |SEQ: " + sequenceNum + " |CSUM: " + checksumByte);
+            
+            // Check if there are any errors indicated by ACK or checksum bytes
             if (receivedAckByte != sequenceNum || checksumByte != '0'){
                 System.err.println("Error: Incorrect ACK byte received or corruption of packet detected by non-zero checksum");
                 return "ACK||CHECK";
             }
 
+        // Timeout occured while waiting for response
         } catch (SocketTimeoutException e){
             System.err.println("Socket Timeout Occured");
             return "TIMEOUT";
+
         } catch (IOException e) {
             System.err.println("Unable to receive message from client");
             return null;
         }
 
-        //return buffer.toString().trim();
         return message;
     }
 
+    
     public static void main(String[] args) {
-        Scanner scan = new Scanner(System.in);
         Sender sender;
         String message;
 
+        // Make sure proper amount of command line arguments are passed in
         if (args.length != 5){
             System.err.println("Usuage: java Sender <sender_port> <receiver_IP> <receiver_port> <network_IP> <network_Port>");
             return;
@@ -152,7 +182,8 @@ public class Sender {
                                 args[2],
                                 args[3],
                                 args[4]);
-            
+        
+        // Error occured when providing arguments to Sender constructor
         } catch (NullPointerException e) {
             System.err.println("Usuage: java Sender <sender_port> <receiver_IP> <receiver_port> <network_IP> <network_Port>");
             return;
@@ -163,17 +194,23 @@ public class Sender {
             return;
         }
 
+        // Read in user provided message
+        Scanner scan = new Scanner(System.in);
         System.out.println("Beginning Sender." + " Port: " + args[0]);
         System.out.print("Enter message: ");
         message = scan.nextLine();
 
-        // Create segments.  Messages will only be 7 bytes with 3 bytes for SEQ#, checksum, term bit followed by 7 byte message
+        // Scanner is no longer needed so close it
+        scan.close();
+
+        // Create segments array.  Messages will only be 7 bytes with 3 bytes for SEQ#, checksum, term bit followed by 7 byte message
         String[] segments = new String[(int) Math.ceil(message.length() / 7.0)];
 
         int sequenceNum = 0;
         int messageStartIDX = 0;
         int messageEndIDX = 0;
 
+        // Segment message and store in segments array
         for (int i = 0; i < segments.length; i++){
             // End of message.  There is less than 7 bytes of data left of message
             if (message.length() - messageEndIDX < 7){
@@ -184,11 +221,14 @@ public class Sender {
                 messageEndIDX += 7;
             }
 
+            // Construct SeqNum + checksum + term byte and prepend it to 7-byte message.  Then store in segments array
             String temp = String.valueOf(sequenceNum) + "0" + 
                           (i == segments.length - 1 ? "1" : "0") +
                           message.substring(messageStartIDX, messageEndIDX);
             segments[i] = temp;
             messageStartIDX = messageEndIDX;
+
+            // Alternate sequence number
             sequenceNum ^= 1;
         }
 
@@ -201,10 +241,13 @@ public class Sender {
         boolean packetsDelivered = false;
         
 
+        // Loop until all packets have been delivered
         while (!packetsDelivered){
             for (int i = 0; i < segments.length; i++){
                 System.out.println("Packet: " + (i + 1) + " out of " + segments.length);
 
+
+                // Send request.  If negative value than a crictical error occured and close the socket
                 if (sender.sendRequest(segments[i], SOURCE_IP, args[0], args[3], args[4], args[1], args[2]) < 0){
                     sender.closeSocket();
                     return;
@@ -212,13 +255,31 @@ public class Sender {
 
                 boolean ackResponse = false;
                 char seqNumChar;
+
+                //  Loop until an ACK reponse is acheived
                 while (!ackResponse){
                     seqNumChar = segments[i].charAt(0);
                     response = sender.receiveResponse(seqNumChar); 
                     
                     if (response != null){
+
+                        // Response indicated a checksum or ACK issue
                         if (response == "ACK||CHECK"){
-                            
+
+                            // Attempt to resend packet until successful resending
+                            while(true){
+                                System.out.println("\nFAILED TO SEND PACKET.  RESENDING PACKET...");
+                                sender.sendRequest(segments[i], SOURCE_IP, args[0], args[3], args[4], args[1], args[2]);
+                                response = sender.receiveResponse(seqNumChar).trim();
+                                if (!response.equals("ACK||CHECK") && !response.equals("TIMEOUT") && response != null){
+                                    System.out.println("PACKET RESENT PROPERLY");
+                                    sender.printResponse(response);
+                                    ackResponse = true;
+                                    break;
+                                }
+                            }
+
+                        // Response timout and should attempt to resend packet
                         } else if (response == "TIMEOUT"){
                             System.out.println("Error: Exeeced time to wait for response from Receiver.\n Sending packet again");
                                 if (sender.sendRequest(segments[i], SOURCE_IP, args[0], args[3], args[4], args[1], args[2]) < 0){
@@ -237,6 +298,6 @@ public class Sender {
         }
 
         sender.closeSocket();
-
+        
     }
 }

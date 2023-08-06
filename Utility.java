@@ -46,6 +46,11 @@ public class Utility {
         return networkPortions;
     }
 
+    
+    /**
+     * Debugging function to quickly print the portions of the network header while testing overall program
+     * @param portions - HashMap containing all portions of the network header being passed across the simulated network
+     */
     public void printNetworkHeaderPortions(HashMap<String, String> portions){
         System.out.println("srcIP: " + portions.get("srcIP"));
         System.out.println("srcPort: " + portions.get("srcPort"));
@@ -54,6 +59,14 @@ public class Utility {
         System.out.println("message: " + portions.get("message"));
     }
 
+    /**
+     * Constructs the datagram packet (called by Sender and Receiver since they create packets)
+     * @param networkHeader - Network header for packet
+     * @param hostname      - IP address the packet is being sent to
+     * @param port          - Port the packet is being sent to
+     * @param bufferSize    - Buffer size of the receiving programs receiveRequest method
+     * @return              - The created datagram packet
+     */
     public DatagramPacket createDatagramPacket(String networkHeader, String hostname, String port, int bufferSize){
         byte buffer[] = new byte[bufferSize];
 
@@ -67,6 +80,7 @@ public class Utility {
         System.arraycopy(message, 0, buffer, 0, Math.min(message.length, buffer.length));
 
         
+        // Try to create the datagram packet
         try {
             return new DatagramPacket(buffer, 
                                       bufferSize, 

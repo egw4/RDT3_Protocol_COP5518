@@ -1,9 +1,7 @@
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
-import java.net.InetAddress;
 import java.net.SocketException;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -12,7 +10,6 @@ public class Receiver {
     private int                 _port;
     private boolean             _continueService;
 
-    private static final int SEGMENT_SIZE = 10;
     private static final int BUFFER_SIZE = 54;
 
     // Utility class to create network header for RDT packet
@@ -68,16 +65,29 @@ public class Receiver {
     }
 
 
+     /**
+     * Calls on the utility class to create the network header and datagram packet to send to the Network
+     * 
+     * @param srcIP         - IP address of Source sending response
+     * @param srcPort       - Port number of Source sending response
+     * @param destIP        - IP address of where response should be sent
+     * @param destPort      - Port of where response should be sent
+     * @param networkIP     - IP address of Network
+     * @param networkPort   - Port number of Network
+     * @param seqNum        - Sequence number of response
+     * @param checksum      - Checksum byte of response
+     * @return              - 0, if no errors; otherwise, non-zero value indicates error
+     */
     public int sendResponse(String srcIP, String srcPort, String destIP, String destPort, String networkIP, String networkPort, String seqNum, String checksum){
 
-        System.out.println("Dest Port: " + destPort);
-        // String networkHeader = this.utility.createNetworkHeader(srcIP, srcPort, destIP, destPort, response);
+        // Create network header for packet and the actual datagram packet itself
         String networkHeader = this.utility.createNetworkHeader(networkIP, Integer.toString(this._port), destIP, destPort, seqNum + checksum + "ACK" + seqNum);
 
         DatagramPacket packet = this.utility.createDatagramPacket(networkHeader, networkIP, networkPort, BUFFER_SIZE);
 
         if(packet != null) {
             try {
+                // Call underlying UDP send method
                 this._socket.send(packet);
                 System.out.println("Receiver's Response: " + networkHeader);
             } catch (IOException e) {
@@ -131,11 +141,10 @@ public class Receiver {
 
             String request = new String(newDatagramPacket.getData());
             HashMap<String, String> networkHeaderPortions = utility.parseNetworkHeader(request);
-            // networkHeaderPortions.put("destPort", Integer.toString(newDatagramPacket.getPort()));
+
 
             String message = networkHeaderPortions.get("message").substring(3);
 
-            // Check for stop bit
 
             System.out.println("Sender IP: " + networkHeaderPortions.get("srcIP"));
             System.out.println("Sender Request: " + message);
@@ -148,6 +157,7 @@ public class Receiver {
                 messagesBuffer.add(message);
             }
 
+            // The term byte is set active and the final message should be printed
             if (networkHeaderPortions.get("message").charAt(2) == '1'){
                 System.out.print("FINAL MESSAGE: ");
                 for (String segment : messagesBuffer){
@@ -160,18 +170,10 @@ public class Receiver {
 
             if (request != null) {
                 
+                // Shudown message was passed to receiver
                 if (message == "STOP"){
                     this._continueService = false;
                 }
-
-                String response = "<echo>" + message + "</echo>";
-                this.utility.printNetworkHeaderPortions(networkHeaderPortions);
-                // this.sendResponse(networkHeaderPortions.get("destIP"),
-                //                   networkHeaderPortions.get("destPort"),
-                //                   networkHeaderPortions.get("srcIP"),
-                //                   networkHeaderPortions.get("srcPort"),
-                //                   Integer.toString(newDatagramPacket.getPort()),
-                //                   response);
                 this.sendResponse(networkHeaderPortions.get("destIP"),
                                   networkHeaderPortions.get("destPort"),
                                   networkHeaderPortions.get("srcIP"),
