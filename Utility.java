@@ -1,8 +1,25 @@
+/** 
+* This program is part of the sender/receiver RDT on UDP implemetation project
+* The program defines a "Utility class" that handles the network header for RDT.
+* Includes a function that creates a network header by combining source IP, source port, destination IP, destination port, and a message. 
+* Includes a function that parses the network header into individual portions. 
+* Program has a debugging function to print the individual portions of the network header. 
+* And it also has a function that constructs a DatagramPacket object using the network header data, destination address, and port number.
+
+* @authors:   Ben Yanick and Gina  Wittman
+* @date:      08/08/2023
+
+* COP5518 Project2
+* File name: Utility.java
+*/
+
+
 import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.HashMap;
 
+// Utility Class
 public class Utility {
     public Utility() {
 
@@ -45,7 +62,6 @@ public class Utility {
 
         return networkPortions;
     }
-
     
     /**
      * Debugging function to quickly print the portions of the network header while testing overall program
