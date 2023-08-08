@@ -1,3 +1,17 @@
+/** 
+* This is a sender program that implements RDT 3.0 protocol using UDP. 
+* The sender sends a message to a receiver through a network. 
+* The message is broken into packets and sent one by one. 
+* Sender handles packets loss and corruption by retransmitting the packets until it receives a valid ACK from receiver.
+  
+* @authors:   Ben Yanick and Gina  Wittman
+* @date:      08/08/2023
+   
+* COP5518 Project2
+* File name: Sender.java
+*/
+
+
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -8,23 +22,32 @@ import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.Scanner;
 
+//Sender class representing the sender application in RDT 3.0 protocol using UDP
 public class Sender {
-    private DatagramSocket      _socket;
-    private int                 _port;
-
+    private DatagramSocket      _socket;  // UDP socket used for communication
+    private int                 _port;    // Sender's port number
     private String receiverIP;
     private String receiverPort;
     private String destIP;
     private String destPort;
-    private static final int SEGMENT_SIZE = 10;
-    private static final int BUFFER_SIZE = 54;
+    private static final int SEGMENT_SIZE = 10;   // Fixed size for the segment
+    private static final int BUFFER_SIZE = 54;    // Fixed size for the buffer used in DatagramPacket
 
     private static final String SOURCE_IP = "127.0.0.1";
     private static final String DEST_IP = "127.0.0.1";
 
-    // Utility class to create network header for RDT packet
+    // Utility class to create network headers for RDT packets
     private Utility utility = new Utility();
 
+    /**
+     * Constructor for the Sender class.
+     * 
+     * @param port         The sender's port number.
+     * @param receiverIP   The IP address of the receiver.
+     * @param receiverPort The port number of the receiver.
+     * @param destIP       The destination IP address (for network).
+     * @param destPort     The destination port number (for network).
+     */
     public Sender(int port, String receiverIP, String receiverPort, String destIP, String destPort){
         this._port = port;
         this.receiverIP = receiverIP;
@@ -35,7 +58,7 @@ public class Sender {
 
     /**
      * Creates socket to bind the specified port to
-     * 
+     *
      * @return - 0, if no error; otherwise, a negative number indicates an error
      */
     public int createSocket() {
@@ -48,7 +71,6 @@ public class Sender {
         }
         return 0;
     }
-
 
     /**
      * Connects and binds to the specified port
@@ -70,7 +92,6 @@ public class Sender {
 
         return 0;
     }
-
 
     /**
      * Closes open socket
@@ -124,7 +145,6 @@ public class Sender {
         return -1;
     }
 
-
     /**
      * Receive the response from the Network (indirectly the Receiver) and return as string
      * @param sequenceNum - Sequence number to check against ACK byte
@@ -165,7 +185,11 @@ public class Sender {
         return message;
     }
 
-    
+    /**
+     * The main method for the Sender application.
+     * 
+     * @param args Command-line arguments: <sender_port> <receiver_IP> <receiver_port> <network_IP> <network_Port>
+     */
     public static void main(String[] args) {
         Sender sender;
         String message;
@@ -240,12 +264,10 @@ public class Sender {
         String response = "";
         boolean packetsDelivered = false;
         
-
         // Loop until all packets have been delivered
         while (!packetsDelivered){
             for (int i = 0; i < segments.length; i++){
                 System.out.println("Packet: " + (i + 1) + " out of " + segments.length);
-
 
                 // Send request.  If negative value than a crictical error occured and close the socket
                 if (sender.sendRequest(segments[i], SOURCE_IP, args[0], args[3], args[4], args[1], args[2]) < 0){
