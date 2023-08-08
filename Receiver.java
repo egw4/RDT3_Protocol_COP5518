@@ -1,3 +1,16 @@
+/** 
+* This is a receiver program that is part of a sender/receiver project implementing RDT 3.0 protocol using UDP. 
+* The receiver listens for incoming UDP packets on a specified port.
+* The receiver gets the UDP packets, extracts the custom network header, processes the data, and generates responses. 
+* The receiver will continue to listen for and manage the received packets until a Shutdown message is received.
+  
+* @authors:   Ben Yanick and Gina  Wittman
+* @date:      08/08/2023
+
+* COP5518 Project2
+* File name: Receiver.java
+*/
+
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -5,12 +18,13 @@ import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.HashMap;
 
+//The Receiver class 
 public class Receiver {
-    private DatagramSocket      _socket;
-    private int                 _port;
-    private boolean             _continueService;
+    private DatagramSocket      _socket;  // The DatagramSocket to send and receive datagrams
+    private int                 _port;    // The port number that the receiver will listen on
+    private boolean             _continueService;  // A boolean flag to control the receiver main loop
 
-    private static final int BUFFER_SIZE = 54;
+    private static final int BUFFER_SIZE = 54; // The constant buffer size for received packets
 
     // Utility class to create network header for RDT packet
     private Utility utility = new Utility();
@@ -24,8 +38,7 @@ public class Receiver {
         this._port = port;
     }
 
-
-
+    
     /**
      * Establishes a datagram socket to bind the specified port to
      * 
@@ -42,7 +55,6 @@ public class Receiver {
     }
 
 
-
     /**
      * Closes open datagram socket
      * 
@@ -54,7 +66,6 @@ public class Receiver {
     }
 
 
-
     /**
      * Displays the reponse given to the receiver
      * 
@@ -63,7 +74,6 @@ public class Receiver {
     public void printResponse(String response){
         System.out.println("FROM SERVER: " + response);
     }
-
 
      /**
      * Calls on the utility class to create the network header and datagram packet to send to the Network
@@ -101,7 +111,6 @@ public class Receiver {
     }
 
 
-
     /**
      * Receives client request by calling upon underlying UDP protocol
      * @return - datagram containing the client request
@@ -121,16 +130,13 @@ public class Receiver {
         return packetToReceive;
     }
 
-    
-
-
+   
     /**
      * Server will listen for requests and generate responses until a <shutdown/> message is passed
      */
     public void run() {
         ArrayList<String> messagesBuffer = new ArrayList<String>();        
         this._continueService = true;
-
 
         while (this._continueService){
             System.out.println("Receiver listening on port " + this._socket.getLocalPort());
@@ -186,7 +192,6 @@ public class Receiver {
         }
         
     }
-
     
 
     public static void main(String[] args){
@@ -195,7 +200,6 @@ public class Receiver {
         String   req;
 
         
-
         if (args.length != 1){
             System.err.println("Missing argument.  Usage: Java Receiver <port number>\n");
             return;
