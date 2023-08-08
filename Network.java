@@ -1,3 +1,16 @@
+/** 
+* This program simulates a network that is using UDP to handle the network traffic. 
+* The nework listens on a specified port for incoming messages from sender or receiver.
+* The program performs a simulation of various network conditions like packet loss, delay, and corruption, and forwards responses back sender/receiver.
+* The program also keeps track and prints statistical data associated with the number of lost, delayed, and corrupt packets.
+
+* @authors:   Ben Yanick and Gina  Wittman
+* @date:      08/08/2023
+
+* COP5518 Project2
+* File name: Network.java
+*/
+
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -7,22 +20,25 @@ import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.Scanner;
 
+//Network class.
 public class Network {
     
+    private DatagramSocket  _socket;            // Private instance variable to hold the DatagramSocket for UDP communication.
+    private int             _port;              // Private variable for port number on which the network simulator will listen for incoming traffic.
+    private boolean         _continueService;   // Private boolean flag to control the service continuation. 
 
-    private DatagramSocket  _socket;
-    private int             _port;
-    private boolean         _continueService;
+    private static final int BUFFER_SIZE = 54; // Constant for buffer size to store received data
 
-    private static final int BUFFER_SIZE = 54;
-
+    // Utility instance for parsing network headers
     private Utility utility = new Utility();
 
+    // Constructor: Initializes the Network class with the specified port
     public Network(int port) {
         this._port = port;
     }
 
-
+    // Creates a new DatagramSocket and binds it to the specified port
+    // Returns 0 on success, -1 on failure
     public int createSocket() {
         try {
             this._socket = new DatagramSocket(this._port);
@@ -84,7 +100,6 @@ public class Network {
         return 0;
     }
     
-
 
     /**
      * Method that handles most of functionality of this class
